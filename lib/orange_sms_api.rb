@@ -1,11 +1,19 @@
 # frozen_string_literal: true
 
 require_relative "orange_sms_api/version"
+require_relative "orange_sms_api/config"
+require_relative "orange_sms_api/configuration"
+require_relative "orange_sms_api/net_http_adapter"
 require "uri"
 require "net/http"
 
 module OrangeSmsApi
+  extend Config
+
   class Error < StandardError; end
+  class InvalidBaseUrl < Error; end
+  class HttpRequestFailed < Error; end
+  ApiResponse = Struct.new(:success?, :status, :body)
 
   ALL_NET_HTTP_ERRORS = [
     SocketError,
@@ -21,36 +29,8 @@ module OrangeSmsApi
   module_function
 
   def authenticate
-    url = URI(config.base_url)
+    adapter = NetHttpAdapter.new(config)
 
-    client = Net::HTTP.new(url.host, url.port)
-    client.use_ssl = true
-
-    request = Net::HTTP::Post.new(url)
-    request["Content-Type"] = "application/x-www-form-urlencoded"
-    request["Authorization"] = config.basic_auth_token
-    request.body = "grant_type=client_credentials"
-
-    response = client.request(request)
-
-    if response.code == "200"
-      return [true, response.body]
-    end
-
-    [false, response.body]
-  rescue *ALL_NET_HTTP_ERRORS
-    [false, "http-request-error"]
-  end
-
-  def config
-    @config ||= Config.new
-  end
-
-  def configure
-    yield(config)
-  end
-
-  class Config
-    attr_accessor :base_url, :basic_auth_token
+    adapter.authenticate
   end
 end
